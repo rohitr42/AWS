@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "VPC with an Instance, LoadBalancer, Autoscaling in Subnet with Apache Webserver",
+    "Description": "AWS CloudFormation Template with VPC, Subnet, LoadBalancer, Autoscaling, RDS and an Instance with LAMP stack installed",
     "Parameters": {
         "InstanceType": {
             "Description": "WebServer EC2 instance type",
@@ -16,12 +16,64 @@
             "Type": "AWS::EC2::KeyPair::KeyName",
             "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
         },
+        "DBInstanceClass": {
+            "AllowedValues": [
+                "db.t2.micro"
+            ],
+            "ConstraintDescription": "must select a valid database instance type.",
+            "Default": "db.t2.micro",
+            "Description": "The database instance type",
+            "Type": "String"
+        },
+        "DBName": {
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.",
+            "Default": "MyDB",
+            "Description": "MySQL database name",
+            "MaxLength": "64",
+            "MinLength": "1",
+            "Type": "String"
+        },
+        "DBPassword": {
+            "AllowedPattern": "[a-zA-Z0-9]*",
+            "Description": "Password for MySQL database access",
+            "MaxLength": "41",
+            "MinLength": "8",
+            "NoEcho": "true",
+            "Type": "String"
+        },
+        "DBRootPassword": {
+            "NoEcho": "true",
+            "Description": "Root password for MySQL",
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "41",
+            "AllowedPattern": "[a-zA-Z0-9]*",
+            "ConstraintDescription": "must contain only alphanumeric characters."
+        },
+        "DBUser": {
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.",
+            "Description": "Username for MySQL database access",
+            "MaxLength": "16",
+            "MinLength": "1",
+            "NoEcho": "true",
+            "Type": "String"
+        },
+        "DBAllocatedStorage": {
+            "ConstraintDescription": "must be between 20 and 25Gb.",
+            "Default": "20",
+            "Description": "The size of the database (Gb)",
+            "MaxValue": "25",
+            "MinValue": "20",
+            "Type": "Number"
+        },
         "SSHLocation": {
-            "Description": " The IP address range that can be used access the web server using SSH.",
+            "Description": " The IP address range that can be used access the web server using SSH ",
             "Type": "String",
             "MinLength": "1",
             "MaxLength": "18",
-            "Default": "0.0.0.0/20",
+            "Default": "0.0.0.0/0",
             "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
             "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
         }
@@ -66,6 +118,28 @@
             "Metadata": {
                 "AWS::CloudFormation::Designer": {
                     "id": "9a52d1bd-1e23-4187-9cb8-b7884644718c"
+                }
+            }
+        },
+        "MyDB": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBName": {
+                    "Ref": "DBName"
+                },
+                "AllocatedStorage": {
+                    "Ref": "DBAllocatedStorage"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceClass"
+                },
+                "Engine": "MySQL",
+                "EngineVersion": "5.5",
+                "MasterUsername": {
+                    "Ref": "DBUser"
+                },
+                "MasterUserPassword": {
+                    "Ref": "DBPassword"
                 }
             }
         },
@@ -270,11 +344,6 @@
                         "Ref": "WebServerSecurityGroup"
                     }
                 ]
-            },
-            "Metadata": {
-                "AWS::CloudFormation::Designer": {
-                    "id": "9daea288-fea5-4b57-af8b-33493d34925e"
-                }
             }
         },
         "WebServerInstance": {
@@ -282,49 +351,270 @@
             "Metadata": {
                 "AWS::CloudFormation::Init": {
                     "configSets": {
-                        "All": [
-                            "ConfigureSampleApp"
+                        "InstallAndRun": [
+                            "Install",
+                            "Configure"
                         ]
                     },
-                    "ConfigureSampleApp": {
+                    "Install": {
                         "packages": {
                             "yum": {
-                                "httpd": []
+                                "mysql": [],
+                                "mysql-server": [],
+                                "mysql-libs": [],
+                                "httpd": [],
+                                "php": [],
+                                "php-mysql": []
                             }
                         },
                         "files": {
-                            "/var/www/html/index.html": {
+                            "/var/www/html/index.php": {
                                 "content": {
                                     "Fn::Join": [
-                                        "\n",
+                                        "",
                                         [
-                                            "<h1>Hey there</h1>"
+                                            "<html>\n",
+                                            "  <head>\n",
+                                            "    <title>AWS CloudFormation PHP Sample</title>\n",
+                                            "    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=ISO-8859-1\">\n",
+                                            "  </head>\n",
+                                            "  <body>\n",
+                                            "    <h1>Welcome to the AWS CloudFormation PHP Sample</h1>\n",
+                                            "    <p/>\n",
+                                            "    <?php\n",
+                                            "      // Print out the current data and time\n",
+                                            "      print \"The Current Date and Time is: <br/>\";\n",
+                                            "      print date(\"g:i A l, F j Y.\");\n",
+                                            "    ?>\n",
+                                            "    <p/>\n",
+                                            "    <?php\n",
+                                            "      // Setup a handle for CURL\n",
+                                            "      $curl_handle=curl_init();\n",
+                                            "      curl_setopt($curl_handle,CURLOPT_CONNECTTIMEOUT,2);\n",
+                                            "      curl_setopt($curl_handle,CURLOPT_RETURNTRANSFER,1);\n",
+                                            "      // Get the hostname of the intance from the instance metadata\n",
+                                            "      curl_setopt($curl_handle,CURLOPT_URL,'http://169.254.169.254/latest/meta-data/public-hostname');\n",
+                                            "      $hostname = curl_exec($curl_handle);\n",
+                                            "      if (empty($hostname))\n",
+                                            "      {\n",
+                                            "        print \"Sorry, for some reason, we got no hostname back <br />\";\n",
+                                            "      }\n",
+                                            "      else\n",
+                                            "      {\n",
+                                            "        print \"Server = \" . $hostname . \"<br />\";\n",
+                                            "      }\n",
+                                            "      // Get the instance-id of the intance from the instance metadata\n",
+                                            "      curl_setopt($curl_handle,CURLOPT_URL,'http://169.254.169.254/latest/meta-data/instance-id');\n",
+                                            "      $instanceid = curl_exec($curl_handle);\n",
+                                            "      if (empty($instanceid))\n",
+                                            "      {\n",
+                                            "        print \"Sorry, for some reason, we got no instance id back <br />\";\n",
+                                            "      }\n",
+                                            "      else\n",
+                                            "      {\n",
+                                            "        print \"EC2 instance-id = \" . $instanceid . \"<br />\";\n",
+                                            "      }\n",
+                                            "      $Database   = \"localhost\";\n",
+                                            "      $DBUser     = \"",
+                                            {
+                                                "Ref": "DBUser"
+                                            },
+                                            "\";\n",
+                                            "      $DBPassword = \"",
+                                            {
+                                                "Ref": "DBPassword"
+                                            },
+                                            "\";\n",
+                                            "      print \"Database = \" . $Database . \"<br />\";\n",
+                                            "      $dbconnection = mysql_connect($Database, $DBUser, $DBPassword)\n",
+                                            "                      or die(\"Could not connect: \" . mysql_error());\n",
+                                            "      print (\"Connected to $Database successfully\");\n",
+                                            "      mysql_close($dbconnection);\n",
+                                            "    ?>\n",
+                                            "    <h2>PHP Information</h2>\n",
+                                            "    <p/>\n",
+                                            "    <?php\n",
+                                            "      phpinfo();\n",
+                                            "    ?>\n",
+                                            "  </body>\n",
+                                            "</html>\n"
                                         ]
                                     ]
                                 },
-                                "mode": "000644",
+                                "mode": "000600",
+                                "owner": "apache",
+                                "group": "apache"
+                            },
+                            "/tmp/setup.mysql": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "CREATE DATABASE ",
+                                            {
+                                                "Ref": "DBName"
+                                            },
+                                            ";\n",
+                                            "GRANT ALL ON ",
+                                            {
+                                                "Ref": "DBName"
+                                            },
+                                            ".* TO '",
+                                            {
+                                                "Ref": "DBUser"
+                                            },
+                                            "'@localhost IDENTIFIED BY '",
+                                            {
+                                                "Ref": "DBPassword"
+                                            },
+                                            "';\n"
+                                        ]
+                                    ]
+                                },
+                                "mode": "000400",
+                                "owner": "root",
+                                "group": "root"
+                            },
+                            "/etc/cfn/cfn-hup.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "[main]\n",
+                                            "stack=",
+                                            {
+                                                "Ref": "AWS::StackId"
+                                            },
+                                            "\n",
+                                            "region=",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                },
+                                "mode": "000400",
+                                "owner": "root",
+                                "group": "root"
+                            },
+                            "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "[cfn-auto-reloader-hook]\n",
+                                            "triggers=post.update\n",
+                                            "path=Resources.WebServerInstance.Metadata.AWS::CloudFormation::Init\n",
+                                            "action=/opt/aws/bin/cfn-init -v ",
+                                            "         --stack ",
+                                            {
+                                                "Ref": "AWS::StackName"
+                                            },
+                                            "         --resource WebServerInstance ",
+                                            "         --configsets InstallAndRun ",
+                                            "         --region ",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n",
+                                            "runas=root\n"
+                                        ]
+                                    ]
+                                },
+                                "mode": "000400",
                                 "owner": "root",
                                 "group": "root"
                             }
                         },
                         "services": {
                             "sysvinit": {
+                                "mysqld": {
+                                    "enabled": "true",
+                                    "ensureRunning": "true"
+                                },
                                 "httpd": {
                                     "enabled": "true",
                                     "ensureRunning": "true"
+                                },
+                                "cfn-hup": {
+                                    "enabled": "true",
+                                    "ensureRunning": "true",
+                                    "files": [
+                                        "/etc/cfn/cfn-hup.conf",
+                                        "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "Configure": {
+                        "commands": {
+                            "01_set_mysql_root_password": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "mysqladmin -u root password '",
+                                            {
+                                                "Ref": "DBRootPassword"
+                                            },
+                                            "'"
+                                        ]
+                                    ]
+                                },
+                                "test": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "$(mysql ",
+                                            {
+                                                "Ref": "DBName"
+                                            },
+                                            " -u root --password='",
+                                            {
+                                                "Ref": "DBRootPassword"
+                                            },
+                                            "' >/dev/null 2>&1 </dev/null); (( $? != 0 ))"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "02_create_database": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "mysql -u root --password='",
+                                            {
+                                                "Ref": "DBRootPassword"
+                                            },
+                                            "' < /tmp/setup.mysql"
+                                        ]
+                                    ]
+                                },
+                                "test": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "$(mysql ",
+                                            {
+                                                "Ref": "DBName"
+                                            },
+                                            " -u root --password='",
+                                            {
+                                                "Ref": "DBRootPassword"
+                                            },
+                                            "' >/dev/null 2>&1 </dev/null); (( $? != 0 ))"
+                                        ]
+                                    ]
                                 }
                             }
                         }
                     }
-                },
-                "AWS::CloudFormation::Designer": {
-                    "id": "20af12a9-20b3-4dca-8185-ca7c2fdf3953"
                 }
             },
             "Properties": {
-                "InstanceType": {
-                    "Ref": "InstanceType"
-                },
                 "ImageId": {
                     "Fn::FindInMap": [
                         "AWSRegionArch2AMI",
@@ -341,6 +631,9 @@
                             ]
                         }
                     ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
                 },
                 "KeyName": {
                     "Ref": "KeyName"
@@ -374,7 +667,7 @@
                                     "Ref": "AWS::StackName"
                                 },
                                 "         --resource WebServerInstance ",
-                                "         --configsets All ",
+                                "         --configsets InstallAndRun ",
                                 "         --region ",
                                 {
                                     "Ref": "AWS::Region"
@@ -405,7 +698,8 @@
         }
     },
     "Outputs": {
-        "URL": {
+        "WebsiteURL": {
+            "Description": "URL for newly created LAMP stack",
             "Value": {
                 "Fn::Join": [
                     "",
@@ -414,221 +708,10 @@
                         {
                             "Fn::GetAtt": [
                                 "WebServerInstance",
-                                "PublicIp"
+                                "PublicDnsName"
                             ]
                         }
                     ]
-                ]
-            },
-            "Description": "Application URL created"
-        }
-    },
-    "Metadata": {
-        "AWS::CloudFormation::Designer": {
-            "fe30cabd-ebb9-47af-b0fb-c8d2db7a1d14": {
-                "size": {
-                    "width": 60,
-                    "height": 60
-                },
-                "position": {
-                    "x": 60,
-                    "y": 840
-                },
-                "z": 1,
-                "embeds": []
-            },
-            "3e39c24a-1034-4488-b15d-7e7e57f93a3b": {
-                "size": {
-                    "width": 750,
-                    "height": 510
-                },
-                "position": {
-                    "x": 30,
-                    "y": 210
-                },
-                "z": 1,
-                "embeds": [
-                    "96b806b5-9640-499c-ab2b-320f692e9212",
-                    "b4594eb2-5589-4d18-8f68-e618ef5485c9",
-                    "9a52d1bd-1e23-4187-9cb8-b7884644718c"
-                ]
-            },
-            "96b806b5-9640-499c-ab2b-320f692e9212": {
-                "size": {
-                    "width": 60,
-                    "height": 60
-                },
-                "position": {
-                    "x": 450,
-                    "y": 570
-                },
-                "z": 2,
-                "parent": "3e39c24a-1034-4488-b15d-7e7e57f93a3b",
-                "embeds": [],
-                "iscontainedinside": [
-                    "3e39c24a-1034-4488-b15d-7e7e57f93a3b",
-                    "3e39c24a-1034-4488-b15d-7e7e57f93a3b",
-                    "3e39c24a-1034-4488-b15d-7e7e57f93a3b"
-                ]
-            },
-            "9daea288-fea5-4b57-af8b-33493d34925e": {
-                "size": {
-                    "width": 60,
-                    "height": 60
-                },
-                "position": {
-                    "x": 180,
-                    "y": 840
-                },
-                "z": 1,
-                "embeds": [],
-                "isassociatedwith": [
-                    "96b806b5-9640-499c-ab2b-320f692e9212"
-                ]
-            },
-            "b4594eb2-5589-4d18-8f68-e618ef5485c9": {
-                "size": {
-                    "width": 240,
-                    "height": 240
-                },
-                "position": {
-                    "x": 450,
-                    "y": 270
-                },
-                "z": 2,
-                "parent": "3e39c24a-1034-4488-b15d-7e7e57f93a3b",
-                "embeds": [
-                    "b66c663d-5d60-4aa4-bf78-79a54c056cd2"
-                ],
-                "iscontainedinside": [
-                    "3e39c24a-1034-4488-b15d-7e7e57f93a3b",
-                    "3e39c24a-1034-4488-b15d-7e7e57f93a3b",
-                    "3e39c24a-1034-4488-b15d-7e7e57f93a3b"
-                ]
-            },
-            "7a8d9a42-10ec-45f6-827b-27dc7caf1bd1": {
-                "source": {
-                    "id": "3e39c24a-1034-4488-b15d-7e7e57f93a3b"
-                },
-                "target": {
-                    "id": "fe30cabd-ebb9-47af-b0fb-c8d2db7a1d14"
-                },
-                "z": 1
-            },
-            "b66c663d-5d60-4aa4-bf78-79a54c056cd2": {
-                "size": {
-                    "width": 60,
-                    "height": 60
-                },
-                "position": {
-                    "x": 510,
-                    "y": 420
-                },
-                "z": 3,
-                "parent": "b4594eb2-5589-4d18-8f68-e618ef5485c9",
-                "embeds": [],
-                "isassociatedwith": [
-                    "fe30cabd-ebb9-47af-b0fb-c8d2db7a1d14"
-                ],
-                "iscontainedinside": [
-                    "b4594eb2-5589-4d18-8f68-e618ef5485c9",
-                    "b4594eb2-5589-4d18-8f68-e618ef5485c9",
-                    "b4594eb2-5589-4d18-8f68-e618ef5485c9"
-                ],
-                "dependson": [
-                    "7a8d9a42-10ec-45f6-827b-27dc7caf1bd1"
-                ]
-            },
-            "9a52d1bd-1e23-4187-9cb8-b7884644718c": {
-                "size": {
-                    "width": 330,
-                    "height": 330
-                },
-                "position": {
-                    "x": 60,
-                    "y": 270
-                },
-                "z": 2,
-                "parent": "3e39c24a-1034-4488-b15d-7e7e57f93a3b",
-                "embeds": [
-                    "20af12a9-20b3-4dca-8185-ca7c2fdf3953",
-                    "13755149-49fd-4a9e-bd87-68f85a4c84a8",
-                    "a0c351c2-d011-4c8e-9e00-a8407a1ec926"
-                ],
-                "iscontainedinside": [
-                    "3e39c24a-1034-4488-b15d-7e7e57f93a3b",
-                    "3e39c24a-1034-4488-b15d-7e7e57f93a3b",
-                    "3e39c24a-1034-4488-b15d-7e7e57f93a3b"
-                ]
-            },
-            "20af12a9-20b3-4dca-8185-ca7c2fdf3953": {
-                "size": {
-                    "width": 60,
-                    "height": 60
-                },
-                "position": {
-                    "x": 120,
-                    "y": 390
-                },
-                "z": 3,
-                "parent": "9a52d1bd-1e23-4187-9cb8-b7884644718c",
-                "embeds": [],
-                "iscontainedinside": [
-                    "9a52d1bd-1e23-4187-9cb8-b7884644718c",
-                    "9a52d1bd-1e23-4187-9cb8-b7884644718c",
-                    "9a52d1bd-1e23-4187-9cb8-b7884644718c"
-                ]
-            },
-            "b9173c53-e93b-4e15-951e-2c53e08b8236": {
-                "source": {
-                    "id": "b4594eb2-5589-4d18-8f68-e618ef5485c9"
-                },
-                "target": {
-                    "id": "9a52d1bd-1e23-4187-9cb8-b7884644718c"
-                },
-                "z": 2
-            },
-            "13755149-49fd-4a9e-bd87-68f85a4c84a8": {
-                "size": {
-                    "width": 60,
-                    "height": 60
-                },
-                "position": {
-                    "x": 240,
-                    "y": 390
-                },
-                "z": 3,
-                "parent": "9a52d1bd-1e23-4187-9cb8-b7884644718c",
-                "embeds": [],
-                "isassociatedwith": [
-                    "96b806b5-9640-499c-ab2b-320f692e9212"
-                ],
-                "iscontainedinside": [
-                    "9a52d1bd-1e23-4187-9cb8-b7884644718c",
-                    "9a52d1bd-1e23-4187-9cb8-b7884644718c",
-                    "9a52d1bd-1e23-4187-9cb8-b7884644718c"
-                ]
-            },
-            "a0c351c2-d011-4c8e-9e00-a8407a1ec926": {
-                "size": {
-                    "width": 60,
-                    "height": 60
-                },
-                "position": {
-                    "x": 120,
-                    "y": 510
-                },
-                "z": 3,
-                "parent": "9a52d1bd-1e23-4187-9cb8-b7884644718c",
-                "embeds": [],
-                "isassociatedwith": [
-                    "13755149-49fd-4a9e-bd87-68f85a4c84a8",
-                    "9daea288-fea5-4b57-af8b-33493d34925e"
-                ],
-                "iscontainedinside": [
-                    "9a52d1bd-1e23-4187-9cb8-b7884644718c",
-                    "9a52d1bd-1e23-4187-9cb8-b7884644718c",
-                    "9a52d1bd-1e23-4187-9cb8-b7884644718c"
                 ]
             }
         }
